@@ -235,50 +235,69 @@
             status.className = "form-status";
             status.textContent = "전송 중입니다…";
 
-            fetch(WEBAPP_URL, {
-                method: "POST",
-                // Apps Script 교차 출처 요청에서 사전 확인(preflight)을 피하기 위해 text/plain으로 전송합니다.
-                // 본문 내용은 그대로 JSON 문자열이며, Apps Script 쪽에서 JSON.parse로 읽습니다.
-                headers: { "Content-Type": "text/plain;charset=utf-8" },
-                body: JSON.stringify({
-                    rep: REP_KEY,
-                    source_page: location.pathname,
-                    referrer: document.referrer || "",
-                    utm_source: new URLSearchParams(location.search).get("utm_source") || "",
-                    utm_medium: new URLSearchParams(location.search).get("utm_medium") || "",
-                    utm_campaign: new URLSearchParams(location.search).get("utm_campaign") || "",
-                    company: company,
-                    employees: employees,
-                    contact_name: contactName,
-                    phone: phone,
-                    email: email,
-                    message: val("message"),
-                    partner_code: val("partner_code"),
-                    agree: !!(agreeEl && agreeEl.checked),
-                    website: honeypotEl ? honeypotEl.value : "" // 허니팟(봇 차단용, 사람은 항상 빈 값)
-                })
-            })
-                .then(function (r) { return r.json(); })
-                .then(function (data) {
-                    if (data && data.ok) {
-                        status.className = "form-status ok";
-                        status.textContent = "신청이 완료되었습니다. 빠르게 연락드리겠습니다.";
-                        form.reset();
-                        if (form.closest(".mobile-modal")) {
-                            setTimeout(closeModal, 1800);
-                        }
-                    } else {
-                        status.className = "form-status err";
-                        status.textContent = (data && data.message) || "전송에 실패했습니다. 잠시 후 다시 시도해 주세요.";
-                    }
-                })
-                .catch(function () {
-                    status.className = "form-status err";
-                    status.textContent = "네트워크 오류입니다. 전화(02-6247-2205)로 문의해 주세요.";
-                })
-                .finally(function () {
-                    if (submitBtn) submitBtn.disabled = false;
-                });
+            // 숨김 iframe (한 번만 생성)
+            var frame = document.getElementById("hidden_iframe");
+            if (!frame) {
+                frame = document.createElement("iframe");
+                frame.name = "hidden_iframe";
+                frame.id = "hidden_iframe";
+                frame.style.display = "none";
+                document.body.appendChild(frame);
+            }
+
+            // 기존 서버(execkey)가 받던 필드 이름 기준. 다르면 이 부분만 수정하세요.
+            var qs = new URLSearchParams(location.search);
+            var payload = {
+                company: company,
+                cnt: employees,
+                manager: contactName,
+                contact: phone,
+                email: email,
+                contents: val("message"),
+                partner_code: val("partner_code"),
+                user_referrer: document.referrer || "",
+                rep: REP_KEY,
+                source_page: location.pathname,
+                utm_source: qs.get("utm_source") || "",
+                utm_medium: qs.get("utm_medium") || "",
+                utm_campaign: qs.get("utm_campaign") || "",
+                agree: "Y",
+                website: honeypotEl ? honeypotEl.value : ""   // 허니팟
+            };
+
+            // 전송용 임시 폼 생성
+            var sendForm = document.createElement("form");
+            sendForm.method = "POST";
+            sendForm.action = WEBAPP_URL;
+            sendForm.target = "hidden_iframe";
+            sendForm.style.display = "none";
+
+            Object.keys(payload).forEach(function (key) {
+                var input = document.createElement("input");
+                input.type = "hidden";
+                input.name = key;
+                input.value = String(payload[key]);
+                sendForm.appendChild(input);
+            });
+            document.body.appendChild(sendForm);
+
+            // iframe load = 전송 완료 신호 (응답 내용은 읽을 수 없음)
+            var sent = false;
+            frame.onload = function () {
+                if (!sent) return;          // iframe 생성 시 발생하는 초기 load 무시
+                sent = false;
+                status.className = "form-status ok";
+                status.textContent = "신청이 완료되었습니다. 빠르게 연락드리겠습니다.";
+                form.reset();
+                if (submitBtn) submitBtn.disabled = false;
+                sendForm.remove();
+                if (form.closest(".mobile-modal")) {
+                    setTimeout(closeModal, 1800);
+                }
+            };
+
+            sent = true;
+            sendForm.submit();
         });
 
         function closeModal() {
