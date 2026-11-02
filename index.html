@@ -239,7 +239,7 @@
                 method: "POST",
                 // Apps Script 교차 출처 요청에서 사전 확인(preflight)을 피하기 위해 text/plain으로 전송합니다.
                 // 본문 내용은 그대로 JSON 문자열이며, Apps Script 쪽에서 JSON.parse로 읽습니다.
-                headers: { "Content-Type": "application/json;charset=utf-8" },
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
                 body: JSON.stringify({
                     rep: REP_KEY,
                     source_page: location.pathname,
